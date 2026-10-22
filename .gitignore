@@ -1,0 +1,25 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# 发布签名密钥与配置（含密码，禁止提交到仓库）
+keystore.properties
+*.jks
+
+# WorkBuddy 工作区数据（本地记忆/技能，不应入库）
+.workbuddy/
+
+# Kotlin 编译器临时错误日志（每次编译都重新生成）
+.kotlin/

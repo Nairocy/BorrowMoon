@@ -1,0 +1,1262 @@
+package com.genkaim.picocam.ui
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.location.LocationManager
+import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.stringResource
+import com.genkaim.picocam.R
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.genkaim.picocam.CameraViewModel
+import com.genkaim.picocam.camera.PhotoStorage
+import android.content.Context
+import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.time.Duration.Companion.milliseconds
+import android.graphics.BitmapFactory
+import com.genkaim.picocam.PhotoViewerActivity
+import com.genkaim.picocam.SettingsActivity
+import com.genkaim.picocam.ui.components.CameraParamItem
+import com.genkaim.picocam.ui.components.CaptureTransitionOverlay
+import com.genkaim.picocam.ui.components.ControlBar
+import com.genkaim.picocam.ui.components.EffectsPanel
+import com.genkaim.picocam.ui.components.ViewfinderFrame
+import com.genkaim.picocam.ui.components.ZoomBar
+import com.genkaim.picocam.ui.components.SlideHintIcon
+import com.genkaim.picocam.dynamic.AppPrefs
+import com.genkaim.picocam.dynamic.LangMode
+import com.genkaim.picocam.dynamic.DynamicIslandConfig
+import com.genkaim.picocam.dynamic.DynamicIslandSettingsActivity
+import com.genkaim.picocam.dynamic.ThemeMode
+import com.genkaim.picocam.dynamic.ViewfinderConfig
+import com.genkaim.picocam.dynamic.isDarkMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.genkaim.picocam.dynamic.ThemePrefs.saveThemeSettings
+import com.genkaim.picocam.ui.theme.RetroBrown
+import com.genkaim.picocam.ui.theme.RetroCream
+import com.genkaim.picocam.ui.theme.RetroRust
+import com.genkaim.picocam.ui.theme.onSurface
+import com.genkaim.picocam.ui.theme.onSurfaceSoft
+import com.genkaim.picocam.ui.theme.surfaceCard
+
+/** 暂时开关（仅作用于相册网格点击）：true=点击照片用【系统图片编辑器】(ACTION_EDIT) 替代内置详情页；
+ *  改回 false 即恢复内置详情页（详情页内的"编辑"按钮是否调系统编辑器由 PhotoViewerActivity 自行控制）。 */
+private const val USE_SYSTEM_EDITOR = false
+
+/** 白色快门闪屏动画时长（ms）。闪屏播放完后再开始取景框→灵动岛 morph，二者共用此常量保证时序一致。 */
+private const val SHUTTER_FLASH_MS = 150
+
+/** 白闪结束到取景框动画开始的额外延迟（ms）。0 = 闪完即 morph。 */
+private const val POST_FLASH_DELAY_MS = 200
+
+@Composable
+fun CameraScreen(vm: CameraViewModel = viewModel()) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // 初始化音效
+    com.genkaim.picocam.camera.SoundEffects.init(context)
+    var hasCamPerm by remember { mutableStateOf(
+        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    ) }
+    var hasLocPerm by remember { mutableStateOf(
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    ) }
+    val camLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasCamPerm = it }
+    val locLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
+        hasLocPerm = perms.values.any { it }
+    }
+    // 相册/存储读取权限：系统编辑器写回、读回编辑结果、以及把照片镜像进系统相册都需要它。
+    // 只接受「允许全部」(full access)：Android 14+ 选「部分访问（选择照片）」时系统授予的是
+    // READ_MEDIA_VISUAL_USER_SELECTED 而【不会】授予 READ_MEDIA_IMAGES，因此以 READ_MEDIA_IMAGES 是否授予为准。
+    val photosRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+    } else {
+        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+    // 判定「已授权」所依据的权限：API 33+ 看 READ_MEDIA_IMAGES，更低版本看 READ_EXTERNAL_STORAGE。
+    // 部分访问模式下 READ_MEDIA_IMAGES 仍为未授予，故天然被排除。
+    val photosFullPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+    fun isFullPhotosAccess(ctx: android.content.Context): Boolean =
+        ContextCompat.checkSelfPermission(ctx, photosFullPermission) == PackageManager.PERMISSION_GRANTED
+    var hasPhotosPerm by remember { mutableStateOf(isFullPhotosAccess(context)) }
+    val photosLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        // 回调里不信任传入结果（部分访问下 READ_MEDIA_IMAGES 仍为未授予），统一以 checkSelfPermission 重新判定。
+        hasPhotosPerm = isFullPhotosAccess(context)
+    }
+    var lastEdited by remember { mutableStateOf<File?>(null) }
+    val viewerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val edited = lastEdited
+        vm.refreshPhotos()
+        vm.notifyPhotosChanged()   // 编辑保存后路径不变但内容已改，强制被编辑照片缩略图重载
+        vm.restoreZoom()
+        // 系统编辑器直接改主图(in place)，但缩略图是缓存的、不会随主图自动更新；这里删旧缩略图后重生成，
+        // 确保相册显示编辑结果。无可用编辑器走内置编辑器时也无害（缩略图本就由内置保存流程重生成）。
+        if (edited != null) {
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    val t = PhotoStorage.thumbnailFileFor(edited)
+                    if (t.exists()) t.delete()
+                    PhotoStorage.generateThumbnail(edited)
+                }
+                withContext(Dispatchers.Main) { vm.notifyPhotosChanged() }
+            }
+        }
+    }
+
+    val captureWithLocation: () -> Unit = {
+        if (hasLocPerm) {
+            try {
+                val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+                val loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                vm.setLastLocation(loc)
+            } catch (_: Exception) {}
+        }
+        vm.takePhoto()
+    }
+
+    // 深色模式下主背景改为深灰
+    val configuration = LocalConfiguration.current
+    val theme by AppPrefs.theme.collectAsStateWithLifecycle()
+    val isSystemDark = (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val isDark = isDarkMode(theme.mode, isSystemDark)
+    val bgColor = if (isDark) Color(0xFF242424) else Color(0xFFF0EDE6)
+
+    Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
+        // 等配置预读完成再渲染，避免首帧用默认参数再跳变（露陷）
+        val loaded by AppPrefs.loaded.collectAsStateWithLifecycle()
+        if (loaded) {
+            if (hasCamPerm && hasLocPerm && theme.onboarded) {
+                CameraContent(vm,                 onSelect = { file, fadeIn ->
+                    lastEdited = file
+                    val intent = if (USE_SYSTEM_EDITOR) {
+                        // 调用系统图片编辑器：通过 FileProvider 把照片 URI 化并授予读写权限，编辑器原地改图；
+                        // 若构建失败或无可用编辑器则回退到内置编辑器。
+                        val sys = runCatching {
+                            val authority = "${context.packageName}.fileprovider"
+                            val uri = androidx.core.content.FileProvider.getUriForFile(context, authority, file)
+                            Intent(Intent.ACTION_EDIT).apply {
+                                setDataAndType(uri, "image/*")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                            }
+                        }.getOrNull()
+                        if (sys != null && sys.resolveActivity(context.packageManager) != null) sys
+                        else Intent(context, PhotoViewerActivity::class.java)
+                            .putExtra("file_path", file.path)
+                            .putExtra("fade_in", fadeIn)
+                    } else {
+                        Intent(context, PhotoViewerActivity::class.java)
+                            .putExtra("file_path", file.path)
+                            .putExtra("fade_in", fadeIn)
+                    }
+                    viewerLauncher.launch(intent)
+                }, onShutter = captureWithLocation)
+            } else {
+                PermissionRequest(
+                    hasCamera = hasCamPerm,
+                    hasLocation = hasLocPerm,
+                    hasPhotos = hasPhotosPerm,
+                    isDark = isDark,
+                    onRequestCamera = { camLauncher.launch(Manifest.permission.CAMERA) },
+                    onRequestLocation = { locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) },
+                    onRequestPhotos = { photosLauncher.launch(photosRequest) },
+                    onNext = {
+                        // 引导流程：仅在此处手动触发灵动岛/取景框设置，并立即持久化「已引导」，
+                        // 相机页本身不再自动触发设置（符合「仅引导界面才触发」）。
+                        scope.launch { context.saveThemeSettings { copy(onboarded = true) } }
+                        context.startActivity(
+                            Intent(context, DynamicIslandSettingsActivity::class.java)
+                                .putExtra("onboarding", true),
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraContent(vm: CameraViewModel, onSelect: (File, Boolean) -> Unit, onShutter: () -> Unit) {
+    val context = LocalContext.current
+    val photos by vm.photos.collectAsStateWithLifecycle()
+    // 编辑返回强制刷新信号：被编辑照片路径不变但内容已改，此 tick 变化驱动相册网格重组，
+    // 使该照片缩略图按 file.lastModified() 重新加载（修复"编辑保存后主界面仍是旧图"）。
+    val photosTick by vm.photosTick.collectAsStateWithLifecycle()
+    val hasTakenPhoto by vm.hasTakenPhoto.collectAsStateWithLifecycle()
+    val flashMode by vm.flashMode.collectAsStateWithLifecycle()
+    val isBackCamera by vm.isBackCamera.collectAsStateWithLifecycle()
+    val zoomLevel by vm.zoomLevel.collectAsStateWithLifecycle()
+    val vfConfig by AppPrefs.viewfinder.collectAsStateWithLifecycle()
+    val diConfig by AppPrefs.dynamicIsland.collectAsStateWithLifecycle()
+    val anim by AppPrefs.animSettings.collectAsStateWithLifecycle()
+    val placeholderPhoto by vm.placeholderPhoto.collectAsStateWithLifecycle()
+    val photoVersion by vm.photoVersion.collectAsStateWithLifecycle()
+    val theme by AppPrefs.theme.collectAsStateWithLifecycle()
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val densityPx = density.density
+    // 深色模式判定：用户选深色→true，选浅色→false，跟随系统→按系统暗色模式
+    val isSystemDark = (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val isDark = when (theme.mode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> isSystemDark
+    }
+    val scope = rememberCoroutineScope()
+    val gridState = rememberLazyGridState()
+    var effectsExpanded by remember { mutableStateOf(false) }
+    // 相册首位占位位置（退出预览时照片飞入此处）；由占位 cell 的 onGloballyPositioned 测量
+    var albumSlot by remember { mutableStateOf<Rect?>(null) }
+    // 刚飞入落点的照片（用于触发该格子边框渐出）；onExit 时置位，使 GridPhotoCard 边框平滑淡出
+    var landedFile by remember { mutableStateOf<File?>(null) }
+
+    // 拍照过渡动画状态：transitionFile 非空时显示 CaptureTransitionOverlay；animating 用于防止动画期间重复触发
+    var transitionFile by remember { mutableStateOf<File?>(null) }
+    var animating by remember { mutableStateOf(false) }
+    // 拍照过渡动画点「编辑」进入编辑器时置 true：叠加层暂不卸载（编辑器盖在同样的照片预览上，避免预览突兀消失），
+    // 待从编辑器返回相机（activity ON_RESUME）再收尾卸载。
+    var pendingEditExit by remember { mutableStateOf(false) }
+    // ============ 多选状态：长按照片进入多选模式 ============
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedPhotos = remember { mutableStateListOf<File>() }
+    // ============ 展开/折叠手势状态 ============
+    // progress：1 = 取景框完全展开（相机态），0 = 折叠为灵动岛（隐藏取景框、只留岛）。全程跟手，松手吸附到 0/1。
+    val progressState = remember { mutableFloatStateOf(0f) }
+    // 多选删除确认弹窗
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<File?>(null) }
+    // 进入多选模式：自动折叠到灵动岛（长按时触发）
+    LaunchedEffect(selectionMode) {
+        if (selectionMode) {
+            animate(progressState.floatValue, 0f, animationSpec = tween(280)) { v: Float, _: Float ->
+                progressState.floatValue = v
+            }
+        }
+    }
+
+    // 取景框→灵动岛 morph 在快门按下后启动（captureStarted 在 CameraX 抓取前发射，
+    // 与按下快门对齐，不受机型拍照延迟影响）。但先让白色快门闪屏播放完（SHUTTER_FLASH_MS），
+    // 再开始 morph——否则 transitionFile 置位会把 flashAlpha 强制归 0、闪屏被瞬间掐断、morph 与闪屏同时启动。
+    LaunchedEffect(Unit) {
+        vm.captureStarted.collect { file ->
+            if (animating) return@collect
+            animating = true
+            effectsExpanded = false   // 拍照播放动画时隐藏效果区（若仍展开）
+            if (anim.animEnabled) {
+                // 先等白色闪屏动画播完，再开始取景框→灵动岛 morph
+                scope.launch {
+                    delay(SHUTTER_FLASH_MS.milliseconds)
+                    // 白闪结束后额外等待 POST_FLASH_DELAY_MS，再开始取景框 morph
+                    if (POST_FLASH_DELAY_MS > 0) delay(POST_FLASH_DELAY_MS.milliseconds)
+                    // 取景框快照到展开态，使过渡 overlay 的 morph 从展开态→灵动岛 视觉正确
+                    progressState.floatValue = 1f
+                    transitionFile = file
+                    // 后台逐步把 progressState 收回到 0，过渡结束时取景框已是折叠态
+                    animate(progressState.floatValue, 0f, animationSpec = tween(durationMillis = 380)) { v, _ ->
+                        progressState.floatValue = v
+                    }
+                }
+            }
+            // 无动画路径不在此启动占位逻辑（animating 已置 true，待 photoCaptured 释放）
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        vm.photoCaptured.collect { file ->
+            if (!anim.animEnabled) {
+                // 无动画：CameraViewModel 拍照后把 file 加入 _photos（带占位 cell，视觉与 GridPhotoCard 一致），
+                // 避免相册从"空状态"突然变到有照片的视觉跳变。addPolaroidFrame 完成后通过 _photoProcessing = false
+                // 通知 UI 端：清占位（GridPhotoCard 走 else 分支，新组合项 fileRatio 第一次读到完整文件 → 正确比例）、
+                // 释放 animating。clearPlaceholder 必须在 photoProcessing 变 false **之后**（保证 addPolaroidFrame 完成、
+                // 文件已带白框），否则 GridPhotoCard 第一次渲染会读到残缺文件。
+                // 关键：takePhoto.onImageSaved 不再更新 _photos（相册在 showDetail=true 之前冻结），
+                // 这里需要主动调 refreshPhotosSync 更新 _photos + setPlaceholder 设置占位
+                // （animating 已由 captureStarted 置 true，此处不重复置；release 在此块的协程末尾）
+                vm.setPlaceholder(file)
+                vm.refreshPhotosSync()
+                scope.launch {
+                    while (vm.photoProcessing.value) {
+                        delay(30)
+                    }
+                    vm.clearPlaceholder()
+                    animating = false
+                }
+                return@collect
+            }
+            // 动画路径：morph 已随 captureStarted 立即启动，照片内容就绪由 overlay 内部 photoVersion 控制，
+            // 这里无需再处理 animating（overlay 结束关闭时由 close()/onExit 触发相册，animating 在其它路径释放）
+        }
+    }
+
+    val flashAlpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        vm.shutterFlash.collect { flashAlpha.snapTo(0.9f); flashAlpha.animateTo(0f, tween(SHUTTER_FLASH_MS)) }
+    }
+
+    val p = progressState.floatValue
+    // 拉开取景框（p 从 0 增大）初期模糊：前 40% 内模糊，到 40% 完全清晰（cos 衰减，p=0 最糊、p=0.4 归零）。
+    // 模糊半径 28dp（加大模糊行程，拉开时更明显的温润虚化过渡）。
+    val blurClearAt = 0.4f
+    val previewBlurPx = with(density) {
+        val f = if (p < blurClearAt) kotlin.math.cos(p / blurClearAt * (Math.PI.toFloat() / 2f)) else 0f
+        (28f * f).dp.toPx()
+    }
+    // 操控区自然高度（px，unbounded 测得，与是否被裁切无关）；给个初值≈200dp 避免首帧塌陷
+    var ctrlNaturalPx by remember { mutableStateOf((200 * densityPx).roundToInt()) }
+    // 跟手行程：手指位移 dragRangePx 对应 progress 走完 0↔1（可调节手感）
+    val dragRangePx = 260f * densityPx
+
+    // 跟手拖拽：按位移改变 progress，返回实际消费的 px（用于 nestedScroll 协作）
+    fun applyDrag(dy: Float): Float {
+        val old = progressState.floatValue
+        val neo = (old + dy / dragRangePx).coerceIn(0f, 1f)
+        progressState.floatValue = neo
+        return (neo - old) * dragRangePx
+    }
+    // 松手吸附：快速滑动按方向定，否则按是否过半。tween 动画仍跟手感（承接手指速度）
+    suspend fun settleTo(velocity: Float) {
+        val cur = progressState.floatValue
+        val target = when {
+            velocity > 900f -> 1f
+            velocity < -900f -> 0f
+            else -> if (cur > 0.5f) 1f else 0f
+        }
+        animate(cur, target, animationSpec = tween(durationMillis = 260)) { v, _ -> progressState.floatValue = v }
+    }
+
+    // 相册嵌套滚动协作：
+    // · 上滑(dy<0) 且已展开(progress>0) 且相册在顶部 → 优先折叠取景框（preScroll 消费）；折叠完剩余量交给相册滚动。
+    // · 下滑(dy>0) 且未完全展开 → 相册先滚回顶部(preScroll 不拦)，到顶后剩余量(postScroll)用于展开取景框。
+    // 这样即满足："展开时相册不在顶部则相册滚动；在顶部才折叠"，以及"折叠态下滑到顶后展开"。
+    val nested = remember(dragRangePx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val dy = available.y
+                if (dy < 0f && progressState.floatValue > 0f && !gridState.canScrollBackward) {
+                    return Offset(0f, applyDrag(dy))
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                val dy = available.y
+                if (dy > 0f && progressState.floatValue < 1f) {
+                    return Offset(0f, applyDrag(dy))
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val midway = progressState.floatValue in 0.0001f..0.9999f
+                if (midway) settleTo(available.y)
+                return if (midway) available else Velocity.Zero
+            }
+        }
+    }
+
+    // 取景框拖拽（作用于取景框/灵动岛本体）：竖向跟手改 progress，松手吸附
+    val headerDrag = Modifier.pointerInput(selectionMode, effectsExpanded) {
+        if (!selectionMode && !effectsExpanded) {
+            detectVerticalDragGestures(
+                onVerticalDrag = { change, dragAmount -> applyDrag(dragAmount); change.consume() },
+                onDragEnd = { scope.launch { settleTo(0f) } },
+                onDragCancel = { scope.launch { settleTo(0f) } },
+            )
+        }
+    }
+
+    // ============ 几何插值：灵动岛(p=0) ↔ 取景框(p=1) ============
+    val screenH = configuration.screenHeightDp.toFloat()
+    val screenW = configuration.screenWidthDp.toFloat()
+    val halfH = screenH / 2f
+    val vfW = vfConfig.widthDp.toFloat()
+    val maxOffset = (halfH - vfConfig.widthDp).coerceAtLeast(0f)
+    val vfTop = (halfH / 2f + (vfConfig.posY - 0.5f) * maxOffset - vfConfig.widthDp.toFloat() / 2f).coerceAtLeast(0f)
+    val vfCenterX = screenW / 2f
+    // 灵动岛折叠态：位置/大小按设置
+    val isW = diConfig.widthDp.toFloat()
+    val isH = diConfig.heightDp.toFloat().coerceAtLeast(12f)
+    val isCenterX = diConfig.posX * screenW
+    val isTop = (diConfig.posY * screenH - isH / 2f).coerceAtLeast(2f)
+    val lerp = { a: Float, b: Float, t: Float -> a + (b - a) * t }
+    // 插值出当前帧的取景框矩形与圆角、横向偏移
+    val fW = lerp(isW, vfW, p)
+    val fH = lerp(isH, vfW, p)     // 展开态为正方形(高=vfW)
+    val fTop = lerp(isTop, vfTop, p)
+    val fCorner = lerp(diConfig.cornerDp.toFloat(), vfConfig.cornerDp.toFloat(), p)
+    val fCenterX = lerp(isCenterX, vfCenterX, p)
+    val xOffsetPx = ((fCenterX - vfCenterX) * densityPx).roundToInt()
+    // 边框宽度取灵动岛高度，并约束不超过取景框一半；折叠态该边框会填满小尺寸取景框 → 呈现纯黑灵动岛外观
+    val borderDp = diConfig.heightDp.coerceIn(0, vfConfig.widthDp / 2)
+
+    // 操控区两段动画：先高度(0→0.5)由 0 到自然值，再不透明度(0.5→1)由 0 到 1（折叠时自动反向：先淡出再收高度）
+    val heightFactor = (p / 0.5f).coerceIn(0f, 1f)
+    val ctrlAlpha = ((p - 0.5f) / 0.5f).coerceIn(0f, 1f)
+    val ctrlNaturalDp = with(density) { ctrlNaturalPx.toDp() }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 相册顶部彩色光晕（空相册引导氛围）：
+        // · 显示时机：【相册为空】(photos.isEmpty()) 时显示——无论是从未拍过照，还是拍过后又删光；
+        //   photos 是响应式 StateFlow，删除后自动重组触发光晕显示/隐藏。
+        // · 位置：本 Box 是覆盖整个屏幕的容器（无 statusBarsPadding），故用 Alignment.TopCenter 贴【屏幕绝对顶边】（碰到状态栏/相机区上方）。
+        // · 光晕中心：水平跟随设置里灵动岛位置 diConfig.posX（非强制居中），垂直做轻微涌动；仅做上下涌动 + 反相呼吸，不水平漂移。
+        // · 层级：作为本 Box 第一个子项（最底），取景框/灵动岛/相册在其上；空相册时屏幕顶部显示，小岛浮于其上。
+        // · 可见性：相册态(p=0)最亮，取景框展开(p→1)淡出；首次进入 900ms 渐入。
+        // · 风格：蓝白晨曦薄雾（参考 Gemini 首页），冷色调柔和无色边界。
+        if (photos.isEmpty()) {
+            val albumGlowFade = (1f - p).coerceIn(0f, 1f)
+            val glowEnter = remember { Animatable(0f) }
+            LaunchedEffect(Unit) { glowEnter.animateTo(1f, tween(900)) }
+            val glowTrans = rememberInfiniteTransition(label = "albumGlow")
+            val breatheA by glowTrans.animateFloat(0.70f, 1.0f, infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Reverse))
+            val breatheB by glowTrans.animateFloat(1.0f, 0.70f, infiniteRepeatable(tween(8500, easing = LinearEasing), RepeatMode.Reverse))  // 反相呼吸，此消彼长
+            val yWarm by glowTrans.animateFloat(-0.05f, 0.03f, infiniteRepeatable(tween(7000, easing = LinearEasing), RepeatMode.Reverse))  // 轻微上下涌动
+            val yCool by glowTrans.animateFloat(0.0f, 0.10f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse))
+            val glowVisible = glowEnter.value * albumGlowFade
+            // Brush.radialGradient 的 center/radius 是【像素坐标】（非 0~1 归一化）：
+            // 之前传 Offset(0.5, ...) 实际是 (0.5px, ...) → 光晕被钉在屏幕左上角。必须把 diConfig.posX 转成像素。
+            val glowBoxHeightPx = 300f * densityPx
+            val glowCenterX = diConfig.posX * screenW * densityPx
+            val glowCenterYWarm = yWarm * glowBoxHeightPx
+            val glowCenterYCool = yCool * glowBoxHeightPx
+            if (glowVisible > 0.01f) {
+                // 主层：晨曦核心（极浅蓝白 → 浅蓝 → 中蓝 → 透明）
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .graphicsLayer { alpha = glowVisible * breatheA }
+                        .background(
+                            Brush.radialGradient(
+                                colors = if (isDark) listOf(
+                                    Color(0xFF9C7FC8).copy(alpha = 0.20f),   // 紫（核心，深色模式调亮一档）
+                                    Color(0xFF7B5FA8).copy(alpha = 0.14f),   // 深紫
+                                    Color(0xFF5C4280).copy(alpha = 0.08f),   // 暗紫
+                                    Color.Transparent,
+                                ) else listOf(
+                                    Color(0xFFF2F7FF).copy(alpha = 0.72f),   // 极浅蓝白（核心）
+                                    Color(0xFFDCE9FF).copy(alpha = 0.52f),   // 浅蓝
+                                    Color(0xFFBDD0F5).copy(alpha = 0.28f),   // 中蓝
+                                    Color.Transparent,
+                                ),
+                                center = Offset(glowCenterX, glowCenterYWarm),
+                                radius = 260f * densityPx,
+                            ),
+                        ),
+                )
+                // 辅层：青紫薄雾（同样居中，反相呼吸叠加出流动层次）
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .graphicsLayer { alpha = glowVisible * breatheB }
+                        .background(
+                            Brush.radialGradient(
+                                colors = if (isDark) listOf(
+                                    Color(0xFF8C70C0).copy(alpha = 0.12f),   // 紫（暗色模式调亮一档）
+                                    Color(0xFF705AA8).copy(alpha = 0.08f),   // 深紫
+                                    Color(0xFF524080).copy(alpha = 0.05f),   // 暗紫
+                                    Color.Transparent,
+                                ) else listOf(
+                                    Color(0xFFD4ECFA).copy(alpha = 0.42f),   // 浅青
+                                    Color(0xFFC4D4F5).copy(alpha = 0.34f),   // 蓝
+                                    Color(0xFFCCBFE8).copy(alpha = 0.20f),   // 微紫
+                                    Color.Transparent,
+                                ),
+                                center = Offset(glowCenterX, glowCenterYCool),
+                                radius = 300f * densityPx,
+                            ),
+                        ),
+                )
+            }
+        }
+        // 模糊已移至 CaptureTransitionOverlay 内部（用刚拍的照片做模糊背景层，scrim 之前），
+        // 相机内容层（取景框/操控区/相册/效果面板）保持清晰，用户能看到相册里的其他照片。
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶部留白：随 progress 在灵动岛顶 ↔ 取景框顶 之间插值
+            Spacer(Modifier.height(fTop.dp))
+
+            // 取景框：随 progress morph（灵动岛尺寸/位置/圆角 ↔ 取景框）。
+            // 重要：ViewfinderFrame 内部的"黑边框"已改为 draw 层 border（不再用 padding 缩小内层 AndroidView），
+            // 折叠态时 AndroidView 仍占满外框（isW × isH），PreviewView 的 Surface 非零，cameraX 持续 STREAMING，
+            // 焦段/手动参数可正常应用。视觉上：折叠态边框 = 厚度 = 岛高，恰好覆盖整张岛 → 呈现纯黑灵动岛外观，
+            // 所以 p ≈ 0 时不需要再 alpha=0（否则连岛本身也看不到了）。
+            ViewfinderFrame(
+                preview = vm.preview,
+                bindCameraUseCases = vm::bindCameraUseCases,
+                flashAlpha = if (transitionFile == null) flashAlpha.value else 0f,
+                eff = vm.effective,
+                previewBlur = previewBlurPx,
+                cornerDp = fCorner,
+                borderDp = borderDp.toFloat(),
+                onPreviewStreaming = vm::onPreviewStreaming,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .offset { IntOffset(xOffsetPx, 0) }
+                    .size(fW.dp, fH.dp)
+                    .then(if (isDark) Modifier.border(1.dp, Color(0xFF5A5A5A), RoundedCornerShape(fCorner.dp)) else Modifier)
+                    .alpha(if (transitionFile == null) 1f else 0f)
+                    .then(headerDrag),
+            )
+
+            // 操控区（缩放条 + 参数行 + 控制栏）：整体作两段动画。外层 Box 高度=自然高度*heightFactor 并裁切；
+            // 内层 Column 用 wrapContentHeight(unbounded) 始终按自然高度测量（onSizeChanged 稳定），alpha=ctrlAlpha。
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(ctrlNaturalDp * heightFactor)
+                    .clipToBounds(),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                        .onSizeChanged { ctrlNaturalPx = it.height }
+                        .graphicsLayer { alpha = ctrlAlpha },
+                ) {
+                    // 缩放条与取景框之间的间距
+                    Spacer(Modifier.height(6.dp))
+                    // 缩放条
+                    ZoomBar(zoomLevel = zoomLevel, isDark = isDark, onZoomChange = vm::setZoom,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 0.dp))
+                    // 手动相机参数行：横滑调节
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CameraParamItem(
+                            name = stringResource(R.string.param_focus_distance),
+                            valueText = vm.focusDistanceText(),
+                            fraction = vm.focusFraction,
+                            onFractionChange = vm::updateFocusFraction,
+                            isDark = isDark,
+                            modifier = Modifier.weight(1f),
+                        )
+                        CameraParamItem(
+                            name = stringResource(R.string.param_shutter_speed),
+                            valueText = vm.shutterSpeedText(),
+                            fraction = vm.shutterFraction,
+                            onFractionChange = vm::updateShutterFraction,
+                            isDark = isDark,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // 控制栏
+                    Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+                        ControlBar(flashMode, isBackCamera, effectsExpanded, vm::toggleFlash, vm::switchCamera,
+                            isDark = isDark,
+                            onShutter = onShutter, onSettings = {
+                                context.startActivity(Intent(context, SettingsActivity::class.java))
+                            }, onToggleEffects = { effectsExpanded = !effectsExpanded })
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+
+            // 相册顶部与上方（灵动岛/操控区）之间留点空隙：折叠态即灵动岛与相册的间距，展开态即操控区与相册的间距
+            Spacer(Modifier.height(8.dp))
+
+            // 剩余区域：相册（底层）+ 效果面板（悬浮层），weight(1f) 吸收全部高度变化（折叠时相册占满）
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                val langMode = AppPrefs.lang.value.mode
+                val isEnglish = langMode == LangMode.EN ||
+                    (langMode == LangMode.SYSTEM && java.util.Locale.getDefault().language.startsWith("en"))
+                // 空相册占位：照片加载出来后用 fadeOut 渐出（而非瞬间消失）。
+                // 用完全限定 androidx.compose.animation.AnimatedVisibility 避免解析到外层 ColumnScope 的扩展。
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = photos.isEmpty(),
+                    enter = fadeIn(tween(300)),
+                    exit = fadeOut(tween(300)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .then(headerDrag),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.camera_hint_swipe_down), style = MaterialTheme.typography.bodyLarge, color = onSurfaceSoft(isDark))
+                            if (isEnglish) {
+                                // 英文：图标后强制换行，避免 "Areas with the [icon] icon..." 在一行内被挤断
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(stringResource(R.string.camera_hint_marked), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark))
+                                        SlideHintIcon(color = onSurfaceSoft(isDark))
+                                    }
+                                    Text(stringResource(R.string.camera_hint_slide_param), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark))
+                                }
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(stringResource(R.string.camera_hint_marked), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark))
+                                    SlideHintIcon(color = onSurfaceSoft(isDark))
+                                    Text(stringResource(R.string.camera_hint_slide_param), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark))
+                                }
+                            }
+                            // 长按提示：拍下首张照片后，长按照片即可进入批量编辑模式（多选删除/分享）
+                            Text(stringResource(R.string.camera_hint_longpress), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark))
+                        }
+                    }
+                }
+                if (photos.isNotEmpty()) {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(3), contentPadding = PaddingValues(top = 44.dp, bottom = 12.dp, start = 12.dp, end = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize().nestedScroll(nested)) {
+                        items(photos, key = { it.path }) { file ->
+                            // 引用 photosTick：编辑返回时它变化 → 本 lambda 重组 → GridPhotoCard 重读 file.lastModified()，
+                            // 被编辑照片缩略图按新 lastModified 重新加载（路径不变故 listPhotos 不触发重组，需此显式信号）。
+                            val _tick = photosTick
+                            if (placeholderPhoto == file) {
+                                // 完全透明占位：只占空间（避免相册从空状态突变到有格子）+ 测量飞入落点
+                                // 不显示任何视觉元素。placeRatio key 含 photoVersion → addPolaroidFrame 完成后
+                                // 比例重算为正确值（虽然透明看不到，但 GridPhotoCard 切换时 fileRatio 也对应正确）。
+                                val placeRatio = remember(file) {
+                                    try {
+                                        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                        BitmapFactory.decodeFile(file.path, o)
+                                        if (o.outWidth > 0 && o.outHeight > 0) o.outWidth.toFloat() / o.outHeight.toFloat() else 1f
+                                    } catch (_: Exception) { 1f }
+                                }
+                                Box(
+                                    Modifier
+                                        .aspectRatio(placeRatio)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Transparent)
+                                        .onGloballyPositioned { coords ->
+                                            val pos = coords.localToRoot(Offset.Zero)
+                                            val w = coords.size.width.toFloat()
+                                            val h = coords.size.height.toFloat()
+                                            albumSlot = Rect(pos.x, pos.y, pos.x + w, pos.y + h)
+                                        },
+                                )
+                            } else {
+                                val isSelected = selectedPhotos.contains(file)
+                                GridPhotoCard(
+                                    file = file,
+                                    isDark = isDark,
+                                    selectionMode = selectionMode,
+                                    isSelected = isSelected,
+                                    isNewest = file == photos.first(),
+                                    justLanded = file == landedFile,
+                                    version = file.lastModified(),
+                                    onClick = {
+                                        if (selectionMode) {
+                                            if (isSelected) selectedPhotos.remove(file) else selectedPhotos.add(file)
+                                        } else {
+                                            onSelect(file, false)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!selectionMode) {
+                                            selectionMode = true
+                                            selectedPhotos.clear()
+                                        }
+                                        if (isSelected) selectedPhotos.remove(file) else selectedPhotos.add(file)
+                                    },
+                                )
+                            }
+                        }   // 关闭 items
+                    }   // 关闭 LazyVerticalGrid
+
+                // 相册顶部渐变（背景色→透明）：仅相册展开(折叠/岛态, p=0)时可见，随展开淡出；让灵动岛下方的相册内容柔和渐显
+                val albumTopFade = (1f - p).coerceIn(0f, 1f)
+                val bgColor = if (isDark) Color(0xFF242424) else Color(0xFFF0EDE6)
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .graphicsLayer { alpha = albumTopFade }
+                        .background(Brush.verticalGradient(listOf(bgColor, Color.Transparent))),
+                )
+
+                // EffectsPanel 已移到 if/else 外部（确保空相册时也能显示）
+
+                // 多选模式：悬浮胶囊底部菜单 + 渐入/上滑/下滑动效 + 点击空白退出选择
+                Column(Modifier.fillMaxSize().background(Color.Transparent)) {
+                    AnimatedVisibility(
+                        visible = selectionMode,
+                        enter = fadeIn(tween(200)),
+                        exit = fadeOut(tween(200)),
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        // 悬浮底部胶囊（抬高到底部 40dp），点击"取消"退出多选
+                        // 浅色模式用 desaturated RetroPaper（0xFFEAE3D5）：保留暖色调但降低饱和度，
+                        // 与相册背景 Color(0xFFF0EDE6) 形成柔和但清晰的对比，不抢视觉焦点；深色模式保持 surfaceCard
+                        // 所有元素固定宽高 + maxLines=1：文字内容变化（"已选 1"↔"已选 999"、"全选"↔"取消全选"）
+                        // 不影响布局，dp 单位随屏幕密度自动缩放（多屏适配）
+                        Row(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 40.dp)
+                                .padding(horizontal = 16.dp)  // 左右间距
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(if (isDark) surfaceCard(isDark) else Color(0xFFEAE3D5))
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            // 取消按钮：固定宽度，无背景
+                            Box(
+                                modifier = Modifier.width(40.dp).height(36.dp).clickable {
+                                    selectionMode = false; selectedPhotos.clear()
+                                },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AutoSizeText(stringResource(R.string.dialog_cancel), modifier = Modifier.fillMaxWidth(), maxFontSize = 13.sp, color = onSurface(isDark), textAlign = TextAlign.Center)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            // 已选计数：固定宽度，容纳"已选 99"
+                            Box(
+                                modifier = Modifier.width(52.dp).height(36.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AutoSizeText(
+                                    stringResource(R.string.camera_selected, selectedPhotos.size),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxFontSize = 13.sp,
+                                    color = onSurfaceSoft(isDark),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            // 全选按钮：固定宽度 Box 居中文字，避免"全选"↔"取消全选"切换时按钮宽度变化
+                            val allSelected = photos.isNotEmpty() && selectedPhotos.size == photos.size
+                            Box(
+                                modifier = Modifier
+                                    .width(60.dp)
+                                    .height(36.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .clickable {
+                                        if (allSelected) selectedPhotos.clear()
+                                        else { selectedPhotos.clear(); selectedPhotos.addAll(photos) }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AutoSizeText(
+                                    if (allSelected) stringResource(R.string.camera_deselect_all) else stringResource(R.string.camera_select_all),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxFontSize = 13.sp,
+                                    color = onSurfaceSoft(isDark),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            // 分享胶囊：固定宽度
+                            val shareChooserTitle = stringResource(R.string.camera_share_photos, selectedPhotos.size)
+                            Box(
+                                Modifier.width(60.dp).height(44.dp).clip(RoundedCornerShape(22.dp))
+                                    .background(if (selectedPhotos.size > 0) surfaceCard(isDark) else onSurfaceSoft(isDark).copy(alpha = 0.3f))
+                                    .clickable(enabled = selectedPhotos.size > 0) {
+                                        val uris = ArrayList<Uri>()
+                                        selectedPhotos.forEach { f ->
+                                            try {
+                                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context, "${context.packageName}.fileprovider", f
+                                                )
+                                                uris.add(uri)
+                                            } catch (_: Exception) {}
+                                        }
+                                        if (uris.isNotEmpty()) {
+                                            val sendIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                                                type = "image/jpeg"
+                                                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(sendIntent, shareChooserTitle))
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AutoSizeText(
+                                    stringResource(R.string.camera_share),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    maxFontSize = 13.sp,
+                                    color = if (selectedPhotos.size > 0) onSurface(isDark) else onSurfaceSoft(isDark),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            // 删除圆形图标（参考相册详情页右下角删除键）：44dp 圆形 + Delete 图标
+                            Box(
+                                Modifier.size(44.dp).clip(CircleShape)
+                                    .background(if (selectedPhotos.size > 0) RetroRust.copy(alpha = 0.15f) else onSurfaceSoft(isDark).copy(alpha = 0.3f))
+                                    .clickable(enabled = selectedPhotos.size > 0) { showDeleteConfirm = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = stringResource(R.string.cd_delete),
+                                    tint = if (selectedPhotos.size > 0) RetroRust else onSurfaceSoft(isDark),
+                                )
+                            }
+                        }   // Row 结束
+                    }   // Box(fillMaxSize) 结束
+                }   // AnimatedVisibility 结束
+            }   // Column 结束（多选菜单列）
+                }   // 关闭 else (空相册 / 有相册)
+
+                // 效果面板：悬浮叠加层，浮在相册上方（控制栏正下方），展开/收起不影响相册布局
+                // 关键：放在 if/else 外部，确保空相册时也能显示（之前在 else 内导致无照片时打不开）
+                EffectsPanel(
+                    visible = effectsExpanded,
+                    vm = vm,
+                    isDark = isDark,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+        }   // 关闭 weight(1f) Box
+        }   // 关闭 Column（相机内容）
+
+        // 拍照后过渡动画：取景框 → 灵动岛 → 打印 → 放大 → 本页详情。
+        // 关键：放在 Column 外面（Box outermost 内），不受 Column 布局/weight 分配影响。
+        // 这样过渡 overlay 自己 fillMaxSize 覆盖整个屏幕，不被 Column 内的 Box(weight) 测量/约束干扰。
+        if (transitionFile != null) {
+            CaptureTransitionOverlay(
+                file = transitionFile!!,
+                vfConfig = vfConfig,
+                diConfig = diConfig,
+                albumSlot = albumSlot,
+                isDark = isDark,
+                photoVersion = photoVersion,
+                extractedColor = vm.extractedColor.collectAsStateWithLifecycle().value,
+                onDetailState = { },
+                onAddToAlbum = {
+                    // 关键：不要重置 albumSlot = null
+                    // 原因：拍照后 _photos 立即包含新文件，albumSlot 已经在 grow 期间被占位 cell onGloballyPositioned 测量。
+                    // 如果这里重置 albumSlot，refreshPhotosSync 后 _photos 内容未变（StateFlow equals 不通知），
+                    // LazyVerticalGrid 不重组 → 占位 cell 不重新布局 → onGloballyPositioned 不触发 → albumSlot 永远为 null
+                    // → close() 飞入动画的 flySlot 始终为 null → 飞入动画不播放。
+                    vm.setPlaceholder(transitionFile!!)
+                    vm.refreshPhotosSync()
+                    // 预加载缩略图到 Coil 内存缓存，使 clearPlaceholder 后 GridPhotoCard 直接命中缓存无闪烁。
+                    // 列表显示的是缩略图，因此这里预热缩略图（而非原图）才能命中缓存。
+                    scope.launch {
+                        val f = transitionFile!!
+                        val t = PhotoStorage.thumbnailFor(f)
+                        val req = ImageRequest.Builder(context)
+                            .data(t)
+                            .size(PhotoStorage.THUMB_SIZE)
+                            .memoryCacheKey("thumb_${t.path}_${t.lastModified()}")
+                            .build()
+                        context.imageLoader.execute(req)
+                    }
+                },
+                onEdit = {
+                    // 调起自建（内置）编辑器：打开相册详情页并直接进入编辑态（open_edit）。
+                    // 关键：不在此处卸载叠加层（否则预览照片会"啪"地消失），而是保持叠加层挂载，
+                    // 让编辑器盖在完全相同的照片预览之上实现平滑过渡；叠加层在从编辑器返回时（ON_RESUME）统一收尾。
+                    transitionFile?.let { f ->
+                        context.startActivity(
+                            Intent(context, PhotoViewerActivity::class.java)
+                                .putExtra("file_path", f.absolutePath)
+                                .putExtra("open_edit", true),
+                        )
+                        pendingEditExit = true
+                    }
+                },
+                onViewfinderAutoOpen = {
+                    // 进入预览模式时（背景模糊后）自动打开取景框
+                    if (anim.openViewfinderAfterCapture) {
+                        scope.launch {
+                            animate(progressState.floatValue, 1f, animationSpec = tween(durationMillis = 380)) { v, _ ->
+                                progressState.floatValue = v
+                            }
+                        }
+                    }
+                },
+                onExit = { deleted ->
+                    vm.clearPlaceholder()   // 占位变真实照片
+                    animating = false
+                    if (!deleted) landedFile = transitionFile   // 触发落点格子边框渐出（仅正常关闭时）
+                    transitionFile = null
+                    vm.restoreZoom()
+                    // 仅删除时才刷新列表（需移除已删文件）；正常关闭不刷新，避免动画后缩略图闪动
+                    if (deleted) vm.refreshPhotosSync()
+                },
+            )
+        }
+
+        // 从「拍照过渡动画 → 编辑」进入编辑器时，叠加层先不卸载（编辑界面盖在同样的照片预览上，避免预览突兀消失）；
+        // 待从编辑器返回相机（ON_RESUME）再收尾：确保新照片已进入相册、清除占位、复位相机并展开取景框。
+        val cameraLifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(cameraLifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    // 从设置页导入照片等外部变更后，回到相机时刷新相册
+                    vm.refreshPhotos()
+                    if (pendingEditExit) {
+                        pendingEditExit = false
+                        transitionFile?.let { f ->
+                            // 确保新照片已在相册列表（编辑可能很快返回，叠加层动画的 onAddToAlbum 尚未执行）
+                            vm.setPlaceholder(f)
+                            scope.launch { vm.refreshPhotosSync() }
+                        }
+                        vm.clearPlaceholder()
+                        animating = false
+                        transitionFile = null
+                        vm.restoreZoom()
+                        // 与正常关闭一致：展开取景框回到相机态
+                        if (anim.openViewfinderAfterCapture) {
+                            scope.launch {
+                                animate(progressState.floatValue, 1f, animationSpec = tween(durationMillis = 380)) { v, _ ->
+                                    progressState.floatValue = v
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            cameraLifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { cameraLifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+
+        // 多选删除二次确认（适配深色模式）。同样放在 Column 外面，避免被 Column 内容遮挡。
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                containerColor = surfaceCard(isDark),
+                title = { Text(stringResource(R.string.camera_delete_photos), fontFamily = FontFamily.Default, color = onSurface(isDark)) },
+                text = { Text(stringResource(R.string.camera_delete_confirm, selectedPhotos.size), fontFamily = FontFamily.Default, color = onSurface(isDark)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        selectedPhotos.toList().forEach { vm.deletePhoto(it) }
+                        selectionMode = false
+                        selectedPhotos.clear()
+                        showDeleteConfirm = false
+                    }) { Text(stringResource(R.string.camera_delete), fontFamily = FontFamily.Default, color = RetroRust) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.dialog_cancel), fontFamily = FontFamily.Default, color = onSurfaceSoft(isDark)) }
+                },
+            )
+        }
+    }   // 关闭 Box outermost
+}   // 关闭 CameraContent
+
+@Composable
+private fun GridPhotoCard(
+    file: File,
+    isDark: Boolean,
+    selectionMode: Boolean,
+    isSelected: Boolean,
+    isNewest: Boolean = false,
+    justLanded: Boolean = false,
+    version: Long = 0L,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    // 预读照片真实比例（仅读文件头）。比例只跟文件本身有关，与任何全局刷新无关。
+    val fileRatio = remember(file) {
+        try {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.path, opts)
+            if (opts.outWidth > 0 && opts.outHeight > 0) opts.outWidth.toFloat() / opts.outHeight.toFloat() else 1f
+        } catch (_: Exception) { 1f }
+    }
+    // [修复] 旧实现把 file.lastModified() 算在 composable 内部，但 GridPhotoCard 可被 Compose 跳过
+    // （file 按路径相等、其余参数皆稳定）→ 编辑返回时 lastMod 不重算 → memoryCacheKey 不变 → 旧缩略图残留。
+    // 现由调用方在 photosTick 变化时重算 file.lastModified() 并以 version 传入：version 变动使本 composable
+    // 无法被跳过 → lastMod 重算 → memoryCacheKey 跟随缩略图 lastModified → 必定加载编辑后新图。
+    val lastMod = version
+    // 列表永远加载缩略图（几十 KB），不读 8MB 原图；缓存 key 用缩略图自身 lastModified，
+    // 与原图解耦 → 任何全局刷新（_photoVersion 变化）都不会让 Coil 重新解码全部缩略图。
+    // crossfade(300) → 拍照后 addPolaroidFrame 完成时，GridPhotoCard 从占位 cell 切换过来，
+    // 图片从无到有 300ms 淡入，避免"格子突然有图"的视觉跳变。
+    val thumb = remember(file, lastMod) { PhotoStorage.thumbnailFor(file) }
+    val request = remember(thumb, lastMod) {
+        ImageRequest.Builder(context)
+            .data(thumb)
+            .size(PhotoStorage.THUMB_SIZE)
+            .memoryCacheKey("thumb_${thumb.path}_${thumb.lastModified()}")
+            .crossfade(300)
+            .build()
+    }
+    // 边框渐入：用 produceState 逐帧更新 borderAlpha，再用 .alpha() + .border() 组合实现渐入。
+    // 不用 Animatable + LaunchedEffect（深色模式下可能因 LazyVerticalGrid slot 复用机制导致动画不触发），
+    // produceState 用 file 作 key，每次新文件都新建协程逐帧更新，每次 value 变化强制 recomposition。
+    val borderAlpha: Float by produceState(initialValue = 0f, key1 = file) {
+        if (isNewest) {
+            val startMs = System.currentTimeMillis()
+            val durationMs = 150L
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startMs
+                value = (elapsed.toFloat() / durationMs).coerceAtMost(1f)
+                if (value >= 1f) break
+                delay(16L)
+            }
+        } else {
+            value = 1f
+        }
+    }
+    // 边框渐出（仅深色模式）：照片飞入落点后，落点格子的边框平滑淡出至透明，避免深色模式下强边框"硬切"。
+    // 与渐入共用 produceState（key=justLanded），每次落点变化强制重跑逐帧动画，深色模式下可靠触发、不依赖 Animatable。
+    val borderOutAlpha: Float by produceState(initialValue = 1f, key1 = justLanded) {
+        // 最新照片（首图）只做渐入、边框保持可见；其余落点格在深色模式下渐出，避免强边框硬切
+        if (justLanded && isDark && !isNewest) {
+            val startMs = System.currentTimeMillis()
+            val durationMs = 350L
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startMs
+                value = (1f - elapsed.toFloat() / durationMs).coerceAtMost(1f).coerceAtLeast(0f)
+                if (value <= 0f) break
+                delay(16L)
+            }
+        } else {
+            value = 1f
+        }
+    }
+    val selBase = if (isSelected) 1f else if (isDark) 0.8f else 0.3f
+    // 选中态颜色：浅色模式用深铁锈红、深色模式用浅奶油白 → 选择框始终与背景形成对比
+    val selColor = if (isSelected) (if (isDark) RetroCream else RetroRust) else onSurfaceSoft(isDark)
+    val borderBaseColor = selColor
+    val borderWidthDp = if (isSelected) 2.dp else 1.dp
+    Box(
+        Modifier
+            .aspectRatio(fileRatio)
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (isSelected) selColor.copy(alpha = 0.35f) else surfaceCard(isDark))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        // 用 AsyncImage 替代 SubcomposeAsyncImage：避免子组合（subcomposition）开销，
+        // 每张缩略图节省一次独立的 Compose 作用域创建/回收，大量照片时帧率明显提升。
+        AsyncImage(
+            model = request,
+            contentDescription = "照片",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+            // 多选模式：右上角选中圆（填充色代表已选，无色=未选，无勾）
+        if (selectionMode) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp)
+                    .clip(CircleShape)
+                    .background(if (isSelected) selColor else Color(0x66000000))
+                    .border(1.5.dp, if (isSelected) (if (isDark) RetroRust else RetroCream) else Color(0x88FFFFFF), CircleShape),
+            )
+        }
+        // 边框：最末尾 child，用于确保在所有 sibling 之上。
+        // 用 .alpha(borderAlpha * selBase) 控制渐入，比之前用 drawWithContent + Animatable 更可靠：
+        // produceState 每帧更新 borderAlpha → 强制 recomposition → .alpha() 重绘整个边框 Box。
+        // 之前方案不生效根因：Animatable.value 在 drawWithContent lambda 中通过闭包捕获，
+        // 深色模式下 LazyVerticalGrid slot 复用可能导致 Animatable 被保留（值为 1f），动画不触发。
+        Box(
+            Modifier
+                .matchParentSize()
+                .alpha(borderAlpha * borderOutAlpha * selBase)
+                .border(
+                    width = borderWidthDp,
+                    color = borderBaseColor,
+                    shape = RoundedCornerShape(4.dp),
+                )
+        )
+    }
+}
+
+@Composable
+private fun PermissionRequest(hasCamera: Boolean, hasLocation: Boolean, hasPhotos: Boolean, isDark: Boolean, onRequestCamera: () -> Unit, onRequestLocation: () -> Unit, onRequestPhotos: () -> Unit, onNext: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("InstCam", style = MaterialTheme.typography.titleLarge, color = onSurface(isDark))
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.permission_need), style = MaterialTheme.typography.bodyMedium, color = onSurfaceSoft(isDark), textAlign = TextAlign.Center)
+        Spacer(Modifier.height(32.dp))
+
+        Box(
+            modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (hasCamera) surfaceCard(isDark) else RetroBrown)
+            .clickable(enabled = !hasCamera, onClick = onRequestCamera)
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AutoSizeText(
+                stringResource(if (hasCamera) R.string.permission_camera_granted else R.string.permission_camera),
+                maxFontSize = 16.sp,
+                color = if (hasCamera) onSurface(isDark) else RetroCream,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (hasPhotos) surfaceCard(isDark) else RetroBrown)
+            .clickable(enabled = !hasPhotos, onClick = onRequestPhotos)
+            .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AutoSizeText(
+                stringResource(if (hasPhotos) R.string.permission_photos_granted else R.string.permission_photos),
+                maxFontSize = 16.sp,
+                color = if (hasPhotos) onSurface(isDark) else RetroCream,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (hasLocation) surfaceCard(isDark) else RetroBrown)
+            .clickable(enabled = !hasLocation, onClick = onRequestLocation)
+            .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AutoSizeText(
+                stringResource(if (hasLocation) R.string.permission_location_granted else R.string.permission_location),
+                maxFontSize = 16.sp,
+                color = if (hasLocation) onSurface(isDark) else RetroCream,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            stringResource(R.string.permission_location_desc),
+            style = MaterialTheme.typography.titleMedium,
+            fontSize = 13.sp,
+            color = onSurface(isDark),
+            modifier = Modifier.padding(top = 14.dp),
+        )
+
+        // 三个权限（相机/定位/相册）都授予后，稍等一下自动进入引导设置（不再需要手动点击"下一步"）
+        if (hasCamera && hasLocation && hasPhotos) {
+            LaunchedEffect(hasCamera, hasLocation, hasPhotos) {
+                delay(400L)
+                onNext()
+            }
+        }
+    }
+}
+
